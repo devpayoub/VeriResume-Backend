@@ -64,7 +64,6 @@ class ResumeListCreateView(APIView):
                 return Response({'error': 'Failed to insert to Supabase'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         except Exception as e:
             import traceback
-            traceback.print_exc()
             return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 class ResumeDetailView(APIView):

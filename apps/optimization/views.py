@@ -170,22 +170,16 @@ class OptimizationRetryView(APIView):
         supabase = get_supabase_client(request)
         user_id = request.user.username
 
-        print(f"[RETRY] Request for session: {session_id}, user: {user_id}")
-
         session_response = supabase.table('sessions').select('*').eq('id', str(session_id)).eq('user_id', user_id).execute()
 
         if not session_response.data:
-            print(f"[RETRY] Session not found in Supabase for id={session_id}, user={user_id}")
             return Response({'error': 'Session not found'}, status=status.HTTP_404_NOT_FOUND)
 
         try:
             token = _get_token(request)
-            print(f"[RETRY] Starting optimization with token present: {bool(token)}")
             result = run_optimization_sync(str(session_id), token)
-            print(f"[RETRY] Optimization finished: {result}")
             return Response(result, status=status.HTTP_200_OK)
         except Exception as e:
-            print(f"[RETRY] Optimization failed: {e}")
             import traceback
             traceback.print_exc()
             return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

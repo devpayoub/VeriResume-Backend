@@ -17,8 +17,6 @@ client = OpenAI(
 
 MODEL = getattr(settings, "LLM_MODEL", "inclusionai/ling-2.6-flash:free")
 
-print(f"[AI] Model: {MODEL} | Key present: {bool(settings.OPENAI_API_KEY)}")
-
 # ── System prompt ──────────────────────────────────────────────────────────
 SYSTEM_PROMPT = """You are a world-class professional resume writer and career coach.
 Your job is to take a user's existing resume and a target job description, then produce
@@ -81,7 +79,7 @@ def run_optimization(
     Returns (rewritten_text, audit_entries).
     rewritten_text is a complete Harvard-format resume string.
     """
-    print(f"[AI] run_optimization called. Projects={opt_add_projects} | Exp={opt_add_experience} | Summary={opt_recreate_summary}")
+    rewritten_text = ""
 
     # Build dynamic prompt rules
     fabrication_rules = ""
@@ -166,7 +164,6 @@ CRITICAL: Output ONLY the resume text. No explanations."""
     
     for current_model in MODELS_TO_TRY:
         try:
-            print(f"[AI] Requesting completion from {current_model}...")
             response = client.chat.completions.create(
                 model=current_model,
                 messages=[
@@ -179,21 +176,16 @@ CRITICAL: Output ONLY the resume text. No explanations."""
             
             # Defensive check for response.choices
             if not response or not hasattr(response, 'choices') or not response.choices:
-                print(f"[AI] Model {current_model} returned no choices. Response: {response}")
                 # Check for OpenRouter specific error payload
                 if hasattr(response, 'error') and response.error:
                     err_msg = response.error.get('message', 'Unknown provider error')
                     err_code = response.error.get('code', 'N/A')
-                    print(f"[AI] Error Details: {err_msg} (Code: {err_code})")
                 continue # Try next model
 
             rewritten_text = response.choices[0].message.content.strip()
             
             if not rewritten_text:
-                print(f"[AI] Model {current_model} returned an empty message.")
                 continue
-
-            print(f"[AI] Generation complete using {current_model}. Output={len(rewritten_text)}ch")
 
             # Standardizing audit entry
             audit_entries = [{
@@ -206,12 +198,10 @@ CRITICAL: Output ONLY the resume text. No explanations."""
             return rewritten_text, audit_entries
 
         except Exception as e:
-            print(f"[AI] Model {current_model} failed: {type(e).__name__}: {e}")
             last_error = e
             continue # Try next model
             
     # If we get here, all models failed
-    print(f"[AI] ALL models in fallback sequence failed.")
     if last_error:
         raise last_error
     raise ValueError("All AI models failed to return a valid response.")
