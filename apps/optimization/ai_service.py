@@ -70,13 +70,83 @@ CRITICAL: Output ONLY the resume text. No explanations before or after. No markd
 
 
 # ── Main entry point ───────────────────────────────────────────────────────
-def run_optimization(resume_text: str, jd_text: str):
+def run_optimization(
+    resume_text: str, 
+    jd_text: str, 
+    opt_add_projects=True, 
+    opt_add_experience=True, 
+    opt_recreate_summary=False
+):
     """
     Returns (rewritten_text, audit_entries).
     rewritten_text is a complete Harvard-format resume string.
-    audit_entries has a single summary entry.
     """
-    print(f"[AI] run_optimization called. Resume={len(resume_text)}ch  JD={len(jd_text)}ch")
+    print(f"[AI] run_optimization called. Projects={opt_add_projects} | Exp={opt_add_experience} | Summary={opt_recreate_summary}")
+
+    # Build dynamic prompt rules
+    fabrication_rules = ""
+    if opt_add_projects:
+        fabrication_rules += "- You MUST seamlessly fabricate and invent new projects directly into the standard resume sections to match the JD perfectly.\n"
+    else:
+        fabrication_rules += "- DO NOT add any new project entries. Only update the wording of existing projects.\n"
+
+    if opt_add_experience:
+        fabrication_rules += "- You MUST seamlessly fabricate and invent new job experiences and company entries to achieve 100% compatibility.\n"
+    else:
+        fabrication_rules += "- DO NOT add any new company or job history entries. Only rewrite or enhance existing bullet points.\n"
+
+    summary_instruction = ""
+    if opt_recreate_summary:
+        summary_instruction = "ADD a crisp 'PROFESSIONAL SUMMARY' section at the top (before Education) with 3-4 lines of ATS-focused narrative.\n"
+    else:
+        summary_instruction = "DO NOT include a professional summary or objective; start directly with Education.\n"
+
+    summary_template = "PROFESSIONAL SUMMARY\n--------------------\n[Summary Text]\n\n" if opt_recreate_summary else ""
+    
+    dynamic_prompt = f"""You are a world-class professional resume writer and career coach.
+Your job is to take a user's existing resume and a target job description, then produce
+a COMPLETE, fully-written, ATS-optimised resume in the Harvard OCS plain-text format.
+
+STRICT RULES:
+1. Keep the user's real name, email, phone, LinkedIn, city/country EXACTLY as-is.
+2. DO NOT DELETE OR OMIT any of the candidate's existing experiences or projects. You MUST preserve all of their original job entries, project entries, and bullet points.
+3. FABRICATION RULES:
+{fabrication_rules}
+4. {summary_instruction}
+5. Rewrite every existing bullet point to be extremely keyword-rich and ATS-optimised.
+6. Expand the SKILLS section with all relevant keywords from the JD.
+7. OUTPUT FORMAT: Use the exact Harvard OCS plain-text format below. Use ONLY plain text – no Markdown. Section headers in ALL CAPS followed by a line of dashes (-------).
+   Bullets use the bullet character •. Dates right-aligned using whitespace.
+
+REQUIRED OUTPUT FORMAT:
+──────────────────────────────────────
+[FULL NAME]
+[City, Country  |  Phone  |  Email  |  LinkedIn]
+
+{summary_template}EDUCATION
+---------
+[University Name]                                                  [Year]
+[Degree]
+• ...
+
+EXPERIENCE
+----------
+[Company Name]                                                     [Dates]
+[Job Title]
+• ...
+
+PROJECTS
+--------
+[Project Name]                                                     [Year]
+• ...
+
+SKILLS
+------
+Programming: ...
+Frameworks: ...
+──────────────────────────────────────
+
+CRITICAL: Output ONLY the resume text. No explanations."""
 
     user_message = (
         f"TARGET JOB DESCRIPTION:\n{jd_text}\n\n"
@@ -88,7 +158,7 @@ def run_optimization(resume_text: str, jd_text: str):
         response = client.chat.completions.create(
             model=MODEL,
             messages=[
-                {"role": "system", "content": SYSTEM_PROMPT},
+                {"role": "system", "content": dynamic_prompt},
                 {"role": "user", "content": user_message},
             ],
             temperature=0.4,
@@ -96,18 +166,16 @@ def run_optimization(resume_text: str, jd_text: str):
         )
         rewritten_text = response.choices[0].message.content.strip()
         print(f"[AI] Generation complete. Output={len(rewritten_text)}ch")
+
+        # Standardizing audit entry
+        audit_entries = [{
+            'original_sentence': 'Full optimization pass',
+            'optimized_sentence': f'Optimization with flags: Projects={opt_add_projects}, Exp={opt_add_experience}, Summary={opt_recreate_summary}',
+            'is_honest': not (opt_add_projects or opt_add_experience),
+            'confidence_score': 1.0
+        }]
+        
+        return rewritten_text, audit_entries
     except Exception as e:
         print(f"[AI] OpenRouter call failed: {e}")
-        raise
-
-    # Single-entry audit trail (full-document level)
-    audit_entries = [
-        {
-            "original_sentence": resume_text[:500] + ("…" if len(resume_text) > 500 else ""),
-            "optimized_sentence": rewritten_text[:500] + ("…" if len(rewritten_text) > 500 else ""),
-            "is_honest": True,
-            "confidence_score": 0.95,
-        }
-    ]
-
-    return rewritten_text, audit_entries
+        raise e

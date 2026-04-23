@@ -42,10 +42,20 @@ def run_optimization_logic(session_id: str, token: str = None):
             raise Exception("Resume text is empty or missing")
             
         jd_text = session.get('job_description_text', '')
-        print(f"[TASKS] JD text length: {len(jd_text) if jd_text else 0}")
         
-        print("[TASKS] Calling AI optimization...")
-        rewritten_text, audit_entries = ai_run(resume_text, jd_text)
+        # Optimization preferences
+        opt_add_projects = session.get('opt_add_projects', True)
+        opt_add_experience = session.get('opt_add_experience', True)
+        opt_recreate_summary = session.get('opt_recreate_summary', False)
+        
+        print(f"[TASKS] Calling AI optimization with preferences: Projects={opt_add_projects}, Exp={opt_add_experience}, Summary={opt_recreate_summary}")
+        rewritten_text, audit_entries = ai_run(
+            resume_text, 
+            jd_text,
+            opt_add_projects=opt_add_projects,
+            opt_add_experience=opt_add_experience,
+            opt_recreate_summary=opt_recreate_summary
+        )
         print(f"[TASKS] AI optimization done. Result length: {len(rewritten_text)}")
         
         result_res = supabase.table('optimized_results').insert({

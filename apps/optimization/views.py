@@ -57,6 +57,9 @@ class OptimizationStartView(APIView):
             'resume_id': resume_id,
             'job_description_text': job_description_text,
             'target_job_title': target_job_title,
+            'opt_add_projects': data.get('opt_add_projects', True),
+            'opt_add_experience': data.get('opt_add_experience', True),
+            'opt_recreate_summary': data.get('opt_recreate_summary', False),
             'status': 'pending'
         }
 
