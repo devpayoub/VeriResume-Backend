@@ -1,0 +1,24 @@
+# Environments
+.env
+.env.*
+
+# Node / Frontend
+node_modules/
+.next/
+dist/
+build/
+npm-debug.log*
+
+# Python / Backend
+__pycache__/
+*.py[cod]
+*$py.class
+venv/
+env/
+db.sqlite3
+*.log
+
+# Editor / System
+.vscode/
+.DS_Store
+Thumbs.db
