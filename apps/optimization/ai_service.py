@@ -15,7 +15,7 @@ client = OpenAI(
     api_key=settings.OPENAI_API_KEY,
 )
 
-MODEL = getattr(settings, "LLM_MODEL", "nvidia/nemotron-3-super-120b-a12b:free")
+MODEL = getattr(settings, "LLM_MODEL", "inclusionai/ling-2.6-flash:free")
 
 print(f"[AI] Model: {MODEL} | Key present: {bool(settings.OPENAI_API_KEY)}")
 
@@ -154,28 +154,64 @@ CRITICAL: Output ONLY the resume text. No explanations."""
         "Please generate the complete optimised resume now."
     )
 
-    try:
-        response = client.chat.completions.create(
-            model=MODEL,
-            messages=[
-                {"role": "system", "content": dynamic_prompt},
-                {"role": "user", "content": user_message},
-            ],
-            temperature=0.4,
-            max_tokens=4096,
-        )
-        rewritten_text = response.choices[0].message.content.strip()
-        print(f"[AI] Generation complete. Output={len(rewritten_text)}ch")
+    # List of models to try in order (fallback sequence)
+    MODELS_TO_TRY = [
+        MODEL, # Primary (Nemotron free)
+        "google/gemini-2.0-flash-exp:free",
+        "mistralai/mistral-7b-instruct:free",
+        "microsoft/phi-3-medium-128k-instruct:free"
+    ]
+    
+    last_error = None
+    
+    for current_model in MODELS_TO_TRY:
+        try:
+            print(f"[AI] Requesting completion from {current_model}...")
+            response = client.chat.completions.create(
+                model=current_model,
+                messages=[
+                    {"role": "system", "content": dynamic_prompt},
+                    {"role": "user", "content": user_message},
+                ],
+                temperature=0.4,
+                max_tokens=4096,
+            )
+            
+            # Defensive check for response.choices
+            if not response or not hasattr(response, 'choices') or not response.choices:
+                print(f"[AI] Model {current_model} returned no choices. Response: {response}")
+                # Check for OpenRouter specific error payload
+                if hasattr(response, 'error') and response.error:
+                    err_msg = response.error.get('message', 'Unknown provider error')
+                    err_code = response.error.get('code', 'N/A')
+                    print(f"[AI] Error Details: {err_msg} (Code: {err_code})")
+                continue # Try next model
 
-        # Standardizing audit entry
-        audit_entries = [{
-            'original_sentence': 'Full optimization pass',
-            'optimized_sentence': f'Optimization with flags: Projects={opt_add_projects}, Exp={opt_add_experience}, Summary={opt_recreate_summary}',
-            'is_honest': not (opt_add_projects or opt_add_experience),
-            'confidence_score': 1.0
-        }]
-        
-        return rewritten_text, audit_entries
-    except Exception as e:
-        print(f"[AI] OpenRouter call failed: {e}")
-        raise e
+            rewritten_text = response.choices[0].message.content.strip()
+            
+            if not rewritten_text:
+                print(f"[AI] Model {current_model} returned an empty message.")
+                continue
+
+            print(f"[AI] Generation complete using {current_model}. Output={len(rewritten_text)}ch")
+
+            # Standardizing audit entry
+            audit_entries = [{
+                'original_sentence': 'Full optimization pass',
+                'optimized_sentence': f'Optimization with flags: Projects={opt_add_projects}, Exp={opt_add_experience}, Summary={opt_recreate_summary}',
+                'is_honest': not (opt_add_projects or opt_add_experience),
+                'confidence_score': 1.0
+            }]
+            
+            return rewritten_text, audit_entries
+
+        except Exception as e:
+            print(f"[AI] Model {current_model} failed: {type(e).__name__}: {e}")
+            last_error = e
+            continue # Try next model
+            
+    # If we get here, all models failed
+    print(f"[AI] ALL models in fallback sequence failed.")
+    if last_error:
+        raise last_error
+    raise ValueError("All AI models failed to return a valid response.")

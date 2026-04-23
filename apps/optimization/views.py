@@ -68,9 +68,14 @@ class OptimizationStartView(APIView):
 
         supabase.table('profiles').update({'credits_remaining': credits_response.data[0]['credits_remaining'] - 1}).eq('id', user_id).execute()
 
-        # Run synchronously for now (no Celery needed)
+        import threading
+        # Run in background to let the user redirect to history immediately
         token = _get_token(request)
-        result = run_optimization_sync(str(session['id']), token)
+        thread = threading.Thread(
+            target=run_optimization_sync,
+            args=(str(session['id']), token)
+        )
+        thread.start()
 
         return Response(session, status=status.HTTP_201_CREATED)
 
