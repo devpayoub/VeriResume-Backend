@@ -37,19 +37,27 @@ def run_optimization_logic(session_id: str, token: str = None):
             raise Exception("Resume text is empty or missing")
             
         jd_text = session.get('job_description_text', '')
+        target_job_title = session.get('target_job_title', '') or ''
         
         # Optimization preferences
         opt_add_projects = session.get('opt_add_projects', True)
         opt_add_experience = session.get('opt_add_experience', True)
         opt_recreate_summary = session.get('opt_recreate_summary', False)
         
-        rewritten_text, audit_entries = ai_run(
-            resume_text, 
+        rewritten_text, audit_entries, resolved_title = ai_run(
+            resume_text,
             jd_text,
+            target_job_title=target_job_title,
             opt_add_projects=opt_add_projects,
             opt_add_experience=opt_add_experience,
             opt_recreate_summary=opt_recreate_summary
         )
+
+        # If the job title was auto-inferred, save it back to the session
+        if not target_job_title and resolved_title:
+            supabase.table('sessions').update({
+                'target_job_title': resolved_title
+            }).eq('id', session_id).execute()
         
         result_res = supabase.table('optimized_results').insert({
             'session_id': session_id,
