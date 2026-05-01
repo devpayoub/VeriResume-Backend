@@ -15,14 +15,11 @@ client = OpenAI(
     api_key=settings.OPENAI_API_KEY,
 )
 
-MODEL = getattr(settings, "LLM_MODEL", "inclusionai/ling-2.6-flash:free")
+MODEL = getattr(settings, "LLM_MODEL", "google/gemini-3-flash-preview")
 
-# ── List of fallback models ─────────────────────────────────────────────────
+# ── Only use the model from environment ──────────────────────────────────────
 MODELS_TO_TRY = [
     MODEL,
-    "google/gemini-2.0-flash-exp:free",
-    "mistralai/mistral-7b-instruct:free",
-    "microsoft/phi-3-medium-128k-instruct:free",
 ]
 
 
@@ -49,9 +46,11 @@ def infer_job_title(jd_text: str) -> str:
                 max_tokens=30,
             )
             if response and response.choices:
-                title = response.choices[0].message.content.strip().strip('"').strip("'")
-                if title:
-                    return title
+                content = response.choices[0].message.content
+                if content:
+                    title = content.strip().strip('"').strip("'")
+                    if title:
+                        return title
         except Exception as e:
             last_error = e
             continue
@@ -202,7 +201,11 @@ CRITICAL: Output ONLY the resume text. No explanations before or after. No markd
             if not response or not hasattr(response, "choices") or not response.choices:
                 continue
 
-            rewritten_text = response.choices[0].message.content.strip()
+            content = response.choices[0].message.content
+            if not content:
+                continue
+
+            rewritten_text = content.strip()
 
             if not rewritten_text:
                 continue
@@ -228,5 +231,5 @@ CRITICAL: Output ONLY the resume text. No explanations before or after. No markd
 
     # All models failed
     if last_error:
-        raise last_error
+        raise ValueError(f"AI Model Error: {str(last_error)}")
     raise ValueError("All AI models failed to return a valid response.")
